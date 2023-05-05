@@ -1,0 +1,125 @@
+import PyPDF2, os, sys, subprocess, pathlib, datetime
+
+def searchwithTesseract(searchFolder, foundPDF_FolderName, searchWords):
+
+    """
+    ADMIN ACCESS AND THESE STEPS ARE REQUIRED FOR THIS TO RUN:
+    1. Go to https://github.com/oschwartz10612/poppler-windows/releases and download the latest .zip release of "poppler".
+    2. Extract the file somewhere convenient.  Copy the \Library\bin folder.
+    3. Go to the Environment Variables for your computer.
+    4. Under the "System variables", choose the "Path" variable and click edit.
+    5. Click new, paste the \Library\bin folderpath, press Enter, then click OK.
+    """
+
+    startTime = datetime.datetime.now().replace(microsecond=0)
+    print("Operation started on {}".format(startTime))
+
+    import PIL.Image
+
+    # try/exception blocks for checking if a module needs to be installed
+    try:
+        from pdf2image import convert_from_path
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", 'pdf2image'])
+    finally:
+        from pdf2image import convert_from_path
+    try:
+        import pytesseract
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", 'pytesseract'])
+    finally:
+        import pytesseract
+        from pytesseract import Output
+
+
+    # Create folder to store found PDFs.
+    dir_path = os.path.dirname(os.path.realpath(__file__)) + "\\" + foundPDF_FolderName
+    pathlib.Path(dir_path).mkdir(parents=True, exist_ok=True)
+
+    fileList = []
+    for file in os.listdir(dir_path):
+        fileList.append(file)
+
+    # Define location of the Tesseract.exe
+    tesseractEXE = r'W:\GIS\WORKING FILES\EM Working Files\Tesseract-OCR\tesseract.exe'
+    pytesseract.pytesseract.tesseract_cmd = tesseractEXE
+
+    # Set max bit size of PDF
+    PIL.Image.MAX_IMAGE_PIXELS = None
+
+    for root, dirs, files in os.walk(searchFolder):
+        for file in files:
+            if file.endswith(fileType):
+                if file not in fileList:
+                    filePath = os.path.join(root, file)
+                    with open(filePath, 'rb') as f:
+                        print(f"Working on file: {file}")
+                        # Convert the provided PDF to an image
+                        pageImage = convert_from_path(filePath)
+
+                        # Set the file read configuration:
+                        formatConfig = r'--oem 3 --psm 6'
+
+                        for i, eachPage in enumerate(pageImage):
+                            grayImage = eachPage.convert('L')
+                            image2Text = pytesseract.image_to_string(grayImage,config=formatConfig)
+
+                            if any(word in image2Text.split() for word in searchWords):
+                                subprocess.run(['robocopy', root, dir_path, file])  # , stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                                print(f'{file} has Easement' + '\n')
+                                break
+                            else:
+                                print(f'{file} has no Easement. Skipping.'+'\n')
+                                break
+                else:
+                    print(f"The PDF {file} has been found already. Skipping.")
+                    continue
+
+    endTime = datetime.datetime.now().replace(microsecond=0)
+    dur = endTime - startTime
+    dur = str(dur)
+    print('Duration: {}'.format(dur))
+
+def singleDocument(pdfFile):
+
+    startTime = datetime.datetime.now().replace(microsecond=0)
+    print("Operation started on {}".format(startTime))
+
+    # Open the PDF file
+    pdf_file = open(pdfFile, 'rb')
+    pdf_reader = PyPDF2.PdfFileReader(pdf_file,strict=False)
+    # Define the word to search for
+    search_word = 'ANALYST'
+    # Iterate through each page of the PDF file
+    for page_num in range(pdf_reader.numPages):
+        page = pdf_reader.getPage(page_num)
+        page_text = page.extractText()
+        # Check if the search word is in the page text
+        if search_word in page_text:
+            print(f'The word "{search_word}" was found on page {page_num+1}.')
+        else:
+            print(f'The word "{search_word}" was not found anywhere.')
+    pdf_file.close()
+
+    endTime = datetime.datetime.now().replace(microsecond=0)
+    dur = endTime - startTime
+    dur = str(dur)
+    print('Duration: {}'.format(dur))
+
+
+if __name__ == '__main__':
+
+    # User variables for searchwithTesseract
+    searchFolder = r"W:\GIS\WORKING FILES\EM Working Files\temp\AB-5402"
+    foundPDF_FolderName = "Found PDF Folder"
+    fileType = ".pdf"
+    searchWords = ['EASEMENT', 'EASEMENTS', 'U.E', 'U. E.', 'PBCUE']
+
+    # User variables for singleDocument
+    pdfFile = r"W:\GIS\WORKING FILES\EM Working Files\Word.PDF.Excel_Documents\PythonIsCool.pdf"
+
+
+    # Depending on if its one document or several, switch the commented line:
+    searchwithTesseract(searchFolder, foundPDF_FolderName, searchWords)
+    # singleDocument(pdfFile)
+
